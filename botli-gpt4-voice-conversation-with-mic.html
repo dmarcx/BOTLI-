@@ -46,6 +46,7 @@
         const formData = new FormData();
         formData.append("file", audioBlob, "speech.wav");
         formData.append("model", "whisper-1");
+        formData.append("language", "he");
 
         const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
           method: "POST",
