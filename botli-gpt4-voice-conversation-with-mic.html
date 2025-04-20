@@ -8,6 +8,12 @@
 <body style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px; max-width: 800px; margin: auto;">
   <h2>🎙 Botli - שיחה קולית בעברית עם GPT-4</h2>
 
+  <label>🔑 מפתח OpenAI:</label><br>
+  <input type="text" id="openaiKey" placeholder="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" style="width:100%; font-size:16px;"><br><br>
+
+  <label>🔑 מפתח Google TTS:</label><br>
+  <input type="text" id="googleKey" placeholder="AIzaSyCls3HQsVgtJLjWqPi6-gTNXIomQSZgUNE" style="width:100%; font-size:16px;"><br><br>
+
   <button onclick="startRecording()" style="font-size: 18px;">🎤 לחץ ודבר</button>
   <p id="recordingStatus">🟢 מוכן להאזין...</p>
 
@@ -16,8 +22,6 @@
   <p id="status"></p>
 
   <script>
-    const openaiKey = "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";
-    const googleKey = "AIzaSyCls3HQsVgtJLjWqPi6-gTNXIomQSZgUNE";
     const messages = [
       {
         role: "system",
@@ -29,6 +33,16 @@
     let audioChunks = [];
 
     async function startRecording() {
+      const openaiKey = document.getElementById("openaiKey").value.trim();
+      const googleKey = document.getElementById("googleKey").value.trim();
+      const status = document.getElementById("status");
+      const conversationDiv = document.getElementById("conversation");
+
+      if (!openaiKey || !googleKey) {
+        status.innerText = "❌ יש להזין את שני המפתחות!";
+        return;
+      }
+
       document.getElementById("recordingStatus").innerText = "🎙 מקליט... דבר עכשיו";
       audioChunks = [];
 
@@ -42,9 +56,9 @@
 
       mediaRecorder.addEventListener("stop", async () => {
         document.getElementById("recordingStatus").innerText = "⏳ מעבד את ההקלטה...";
-        const audioBlob = new Blob(audioChunks);
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
         const formData = new FormData();
-        formData.append("file", audioBlob, "speech.wav");
+        formData.append("file", audioBlob, "speech.webm");
         formData.append("model", "whisper-1");
         formData.append("language", "he");
 
@@ -58,12 +72,12 @@
         const userText = whisperData.text || "";
 
         if (!userText) {
-          document.getElementById("status").innerText = "❌ לא זוהה טקסט מההקלטה.";
+          status.innerText = "❌ לא זוהה טקסט מההקלטה.";
           return;
         }
 
-        document.getElementById("conversation").innerHTML += "\n👤 אתה: " + userText + "\n";
-        document.getElementById("status").innerText = "🧠 שולח ל-GPT-4...";
+        conversationDiv.innerHTML += "\n👤 אתה: " + userText + "\n";
+        status.innerText = "🧠 שולח ל-GPT-4...";
 
         messages.push({ role: "user", content: userText });
 
@@ -83,8 +97,8 @@
         const reply = gptData.choices?.[0]?.message?.content || "שגיאה";
         messages.push({ role: "assistant", content: reply });
 
-        document.getElementById("conversation").innerHTML += "🤖 Botli: " + reply + "\n";
-        document.getElementById("status").innerText = "🔊 מקריא תשובה...";
+        conversationDiv.innerHTML += "🤖 Botli: " + reply + "\n";
+        status.innerText = "🔊 מקריא תשובה...";
 
         const ttsRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`, {
           method: "POST",
@@ -102,7 +116,7 @@
           const audio = new Audio("data:audio/mp3;base64," + ttsData.audioContent);
           audio.play();
         } else {
-          document.getElementById("status").innerText = "❌ שגיאה בהקראה: " + JSON.stringify(ttsData.error || ttsData);
+          status.innerText = "❌ שגיאה בהקראה: " + JSON.stringify(ttsData.error || ttsData);
         }
 
         document.getElementById("recordingStatus").innerText = "🟢 מוכן להאזין...";
@@ -110,7 +124,7 @@
 
       setTimeout(() => {
         mediaRecorder.stop();
-      }, 5000); // זמן הקלטה מוגבל ל-5 שניות
+      }, 5000);
     }
   </script>
 </body>
