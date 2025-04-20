@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <title>Botli בעברית - שיחה קולית עם GPT-4</title>
+</head>
+<body style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px; max-width: 800px; margin: auto;">
+  <h2>🎙 Botli - שיחה קולית בעברית עם GPT-4</h2>
+
+  <button onclick="startRecording()" style="font-size: 18px;">🎤 לחץ ודבר</button>
+  <p id="recordingStatus">🟢 מוכן להאזין...</p>
+
+  <h3>🗣 שיחה:</h3>
+  <div id="conversation" style="white-space: pre-wrap; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; min-height: 200px;"></div>
+  <p id="status"></p>
+
+  <script>
+    const openaiKey = "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";
+    const googleKey = "AIzaSyCls3HQsVgtJLjWqPi6-gTNXIomQSZgUNE";
+    const messages = [
+      {
+        role: "system",
+        content: "אתה Botli, עוזר תיעוד לבדיקות Commissioning. אתה שואל שאלות שלב אחרי שלב לפי תהליך בדיקה בשטח. אתה לא מדלג על שלבים, שואל שאלה אחת בכל פעם, ומדבר בעברית ברורה. אל תסביר יותר מדי – תוביל את הבדיקה כמו טכנאי מנוסה."
+      }
+    ];
+
+    let mediaRecorder;
+    let audioChunks = [];
+
+    async function startRecording() {
+      document.getElementById("recordingStatus").innerText = "🎙 מקליט... דבר עכשיו";
+      audioChunks = [];
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.start();
+
+      mediaRecorder.addEventListener("dataavailable", event => {
+        audioChunks.push(event.data);
+      });
+
+      mediaRecorder.addEventListener("stop", async () => {
+        document.getElementById("recordingStatus").innerText = "⏳ מעבד את ההקלטה...";
+        const audioBlob = new Blob(audioChunks);
+        const formData = new FormData();
+        formData.append("file", audioBlob, "speech.wav");
+        formData.append("model", "whisper-1");
+
+        const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + openaiKey },
+          body: formData
+        });
+
+        const whisperData = await whisperResponse.json();
+        const userText = whisperData.text || "";
+
+        if (!userText) {
+          document.getElementById("status").innerText = "❌ לא זוהה טקסט מההקלטה.";
+          return;
+        }
+
+        document.getElementById("conversation").innerHTML += "\n👤 אתה: " + userText + "\n";
+        document.getElementById("status").innerText = "🧠 שולח ל-GPT-4...";
+
+        messages.push({ role: "user", content: userText });
+
+        const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + openaiKey
+          },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: messages
+          })
+        });
+
+        const gptData = await gptRes.json();
+        const reply = gptData.choices?.[0]?.message?.content || "שגיאה";
+        messages.push({ role: "assistant", content: reply });
+
+        document.getElementById("conversation").innerHTML += "🤖 Botli: " + reply + "\n";
+        document.getElementById("status").innerText = "🔊 מקריא תשובה...";
+
+        const ttsRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: { text: reply },
+            voice: { languageCode: "he-IL", name: "he-IL-Standard-B" },
+            audioConfig: { audioEncoding: "MP3" }
+          })
+        });
+
+        const ttsData = await ttsRes.json();
+
+        if (ttsData.audioContent) {
+          const audio = new Audio("data:audio/mp3;base64," + ttsData.audioContent);
+          audio.play();
+        } else {
+          document.getElementById("status").innerText = "❌ שגיאה בהקראה: " + JSON.stringify(ttsData.error || ttsData);
+        }
+
+        document.getElementById("recordingStatus").innerText = "🟢 מוכן להאזין...";
+      });
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+      }, 5000); // זמן הקלטה מוגבל ל-5 שניות
+    }
+  </script>
+</body>
+</html>
